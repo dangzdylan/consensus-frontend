@@ -1,78 +1,118 @@
 import React from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ActivityIndicator, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, ActivityIndicator, ScrollView, Alert } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import colors from '../constants/colors';
+import { consensusAPI } from '../services/api';
 
 export default function WaitingScreen({ route, navigation }) {
-    const { allRoundsComplete, lobbyData, isOwner } = route?.params || {};
+    const { lobby_id, lobbyData, isOwner } = route?.params || {};
     const MAX_WAIT_TIME = 300000; // 5 minutes max wait
     const POLL_INTERVAL = 2000; // Poll every 2 seconds
     
-    // Mock data - in real app, this would listen to backend for completion
-    const [waitingFor, setWaitingFor] = React.useState(['Alice', 'Bob']);
-    const [isComplete, setIsComplete] = React.useState(allRoundsComplete || false);
+    const [waitingFor, setWaitingFor] = React.useState([]);
+    const [isComplete, setIsComplete] = React.useState(false);
     const [waitTime, setWaitTime] = React.useState(0);
+    const [currentRound, setCurrentRound] = React.useState(1);
+    const [totalRounds, setTotalRounds] = React.useState(0);
     const startTimeRef = React.useRef(Date.now());
+    const isMountedRef = React.useRef(true);
 
-    // Simulate auto-navigation when everyone is done
+    // Poll waiting status from backend
     React.useEffect(() => {
+        isMountedRef.current = true;
+        
+        if (!lobby_id) {
+            Alert.alert('Error', 'Lobby ID missing');
+            if (navigation && navigation.goBack) {
+                navigation.goBack();
+            }
+            return;
+        }
+
         const startTime = Date.now();
         startTimeRef.current = startTime;
 
-        if (isComplete) {
-            // In real app, this would wait for all users to finish all rounds
-            const timer = setTimeout(() => {
-                // Navigate to itinerary screen with results
-                if (navigation && navigation.replace) {
-                    navigation.replace('Itinerary', {
-                        lobbyData: lobbyData || {},
-                        selectedActivities: [], // TODO: Get from voting results
-                        isOwner: isOwner !== undefined ? isOwner : false,
-                    });
-                }
-            }, 3000); // Wait 3 seconds to show completion
+        const pollWaitingStatus = async () => {
+            if (!isMountedRef.current) return;
+            
+            try {
+                const result = await consensusAPI.getWaitingStatus(lobby_id);
 
-            return () => clearTimeout(timer);
-        } else {
-            // Still waiting for others to finish current round
-            // In real app, poll backend for completion status
-            const pollInterval = setInterval(() => {
-                const elapsed = Date.now() - startTime;
-                setWaitTime(elapsed);
+                if (!isMountedRef.current) return;
 
-                // Check timeout
-                if (elapsed > MAX_WAIT_TIME) {
-                    clearInterval(pollInterval);
-                    alert('Wait time exceeded. Returning to lobby.');
-                    if (navigation && navigation.goBack) {
-                        navigation.goBack();
-                    }
+                if (result.error) {
+                    console.error('Error fetching waiting status:', result.error);
                     return;
                 }
 
-                // TODO: In real app, check backend:
-                // const status = await checkRoundStatus();
-                // if (status.allComplete) {
-                //     setIsComplete(true);
-                //     setWaitingFor([]);
-                // } else {
-                //     setWaitingFor(status.waitingFor);
-                // }
-            }, POLL_INTERVAL);
+                if (result.data && isMountedRef.current) {
+                    setCurrentRound(result.data.current_round || 1);
+                    setTotalRounds(result.data.total_rounds || 0);
+                    
+                    // Check if all rounds are complete
+                    if (result.data.all_finished && result.data.current_round >= result.data.total_rounds) {
+                        setIsComplete(true);
+                        setWaitingFor([]);
+                    } else {
+                        // Backend returns usernames in users_waiting array
+                        setWaitingFor(result.data.users_waiting || []);
+                    }
+                }
+            } catch (error) {
+                console.error('Error polling waiting status:', error);
+            }
+        };
 
-            // Simulate completion for demo
-            const completionTimer = setTimeout(() => {
-                setIsComplete(true);
-                setWaitingFor([]);
-            }, 5000);
+        // Initial poll
+        pollWaitingStatus();
+
+        // Poll interval
+        const pollInterval = setInterval(() => {
+            if (!isMountedRef.current) return;
+            
+            const elapsed = Date.now() - startTime;
+            setWaitTime(elapsed);
+
+            // Check timeout
+            if (elapsed > MAX_WAIT_TIME) {
+                clearInterval(pollInterval);
+                if (isMountedRef.current) {
+                    Alert.alert('Timeout', 'Wait time exceeded. Returning to lobby.');
+                    if (navigation && navigation.goBack) {
+                        navigation.goBack();
+                    }
+                }
+                return;
+            }
+
+            pollWaitingStatus();
+        }, POLL_INTERVAL);
+
+        return () => {
+            isMountedRef.current = false;
+            clearInterval(pollInterval);
+        };
+    }, [lobby_id, navigation]);
+
+    // Navigate to itinerary when complete
+    React.useEffect(() => {
+        if (isComplete && isMountedRef.current) {
+            const timer = setTimeout(() => {
+                if (isMountedRef.current && navigation && navigation.replace) {
+                    navigation.replace('Itinerary', {
+                        lobby_id,
+                        lobbyData: lobbyData || {},
+                        isOwner: isOwner !== undefined ? isOwner : false,
+                    });
+                }
+            }, 2000); // Wait 2 seconds to show completion
 
             return () => {
-                clearInterval(pollInterval);
-                clearTimeout(completionTimer);
+                clearTimeout(timer);
             };
         }
-    }, [navigation, isComplete, lobbyData, isOwner]);
+    }, [isComplete, navigation, lobby_id, lobbyData, isOwner]);
 
     return (
         <SafeAreaView style={styles.container}>
@@ -100,7 +140,13 @@ export default function WaitingScreen({ route, navigation }) {
                     </Text>
                 </View>
 
-                {waitingFor.length > 0 && (
+                {!isComplete && (
+                    <Text style={styles.roundInfo}>
+                        Round {currentRound} of {totalRounds}
+                    </Text>
+                )}
+
+                {waitingFor.length > 0 && !isComplete && (
                     <View style={styles.membersList}>
                         <Text style={styles.membersTitle}>
                             Still swiping ({waitingFor.length}):
@@ -109,12 +155,12 @@ export default function WaitingScreen({ route, navigation }) {
                             style={styles.membersScrollView}
                             showsVerticalScrollIndicator={waitingFor.length > 5}
                         >
-                            {waitingFor.slice(0, 10).map((name, index) => (
-                                <View key={`${name}-${index}`} style={styles.memberItem}>
+                            {waitingFor.slice(0, 10).map((username, index) => (
+                                <View key={`${username}-${index}`} style={styles.memberItem}>
                                     <View style={styles.avatarCircle}>
                                         <Ionicons name="person" size={20} color={colors.primary} />
                                     </View>
-                                    <Text style={styles.memberName}>{name}</Text>
+                                    <Text style={styles.memberName}>{username}</Text>
                                     <ActivityIndicator size="small" color={colors.white} />
                                 </View>
                             ))}
@@ -209,5 +255,11 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         marginTop: 8,
         fontStyle: 'italic',
+    },
+    roundInfo: {
+        fontSize: 18,
+        color: 'rgba(255, 255, 255, 0.9)',
+        marginBottom: 24,
+        fontWeight: '600',
     },
 });

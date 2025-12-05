@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, Image, Dimensions } from 'react-native';
 import colors from '../constants/colors';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,9 +8,22 @@ const CARD_WIDTH = width * 0.9;
 const CARD_HEIGHT = CARD_WIDTH * 1.5;
 
 export default function Card({ item }) {
+    const [imageError, setImageError] = useState(false);
+
     return (
         <View style={styles.card}>
-            <Image source={{ uri: item.image }} style={styles.image} />
+            {item.image && !imageError ? (
+                <Image 
+                    source={{ uri: item.image }} 
+                    style={styles.image}
+                    onError={() => setImageError(true)}
+                />
+            ) : (
+                <View style={[styles.image, styles.imagePlaceholder]}>
+                    <Ionicons name="image-outline" size={48} color={colors.gray} />
+                    <Text style={styles.placeholderText}>No Image</Text>
+                </View>
+            )}
             <View style={styles.infoContainer}>
                 <Text style={styles.name}>{item.name}</Text>
                 <View style={styles.detailsRow}>
@@ -44,6 +57,16 @@ const styles = StyleSheet.create({
         width: '100%',
         height: '75%',
         resizeMode: 'cover',
+    },
+    imagePlaceholder: {
+        backgroundColor: colors.gray + '40',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    placeholderText: {
+        marginTop: 8,
+        color: colors.gray,
+        fontSize: 14,
     },
     infoContainer: {
         padding: 16,

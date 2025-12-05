@@ -7,6 +7,7 @@ export default function Button({ title, onPress, variant = 'primary', style, loa
     const backgroundColor = disabled ? colors.gray : isPrimary ? colors.white : 'transparent';
     const textColor = disabled ? colors.darkGray : isPrimary ? colors.primary : colors.white;
     const borderColor = isPrimary ? 'transparent' : colors.white;
+    const isDisabled = disabled || loading || !onPress;
 
     return (
         <TouchableOpacity
@@ -15,8 +16,8 @@ export default function Button({ title, onPress, variant = 'primary', style, loa
                 { backgroundColor, borderColor, borderWidth: isPrimary ? 0 : 2 },
                 style,
             ]}
-            onPress={onPress}
-            disabled={disabled || loading}
+            onPress={isDisabled ? undefined : (onPress || (() => {}))}
+            disabled={isDisabled}
             activeOpacity={0.8}
         >
             {loading ? (

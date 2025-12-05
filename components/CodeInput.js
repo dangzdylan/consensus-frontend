@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { View, TextInput, StyleSheet } from 'react-native';
 import colors from '../constants/colors';
 
@@ -7,8 +7,14 @@ export default function CodeInput({ length = 4, onCodeChange }) {
     const validLength = Math.max(4, Math.min(6, parseInt(length, 10) || 4));
     const [code, setCode] = useState(new Array(validLength).fill(''));
     const inputs = useRef([]);
+    const timeoutRef = useRef(null);
 
     const handleChange = (text, index) => {
+        // Clear previous timeout
+        if (timeoutRef.current) {
+            clearTimeout(timeoutRef.current);
+        }
+        
         // Only allow alphanumeric characters
         const sanitizedText = text.replace(/[^A-Z0-9]/gi, '').toUpperCase().slice(0, 1);
         
@@ -25,19 +31,41 @@ export default function CodeInput({ length = 4, onCodeChange }) {
         if (sanitizedText && index < validLength - 1) {
             const nextInput = inputs.current[index + 1];
             if (nextInput) {
-                setTimeout(() => nextInput.focus(), 0);
+                timeoutRef.current = setTimeout(() => {
+                    if (nextInput && nextInput.focus) {
+                        nextInput.focus();
+                    }
+                }, 0);
             }
         }
     };
 
     const handleKeyPress = (e, index) => {
         if (e.nativeEvent.key === 'Backspace' && !code[index] && index > 0) {
+            // Clear previous timeout
+            if (timeoutRef.current) {
+                clearTimeout(timeoutRef.current);
+            }
+            
             const prevInput = inputs.current[index - 1];
             if (prevInput) {
-                setTimeout(() => prevInput.focus(), 0);
+                timeoutRef.current = setTimeout(() => {
+                    if (prevInput && prevInput.focus) {
+                        prevInput.focus();
+                    }
+                }, 0);
             }
         }
     };
+
+    // Cleanup timeout on unmount
+    useEffect(() => {
+        return () => {
+            if (timeoutRef.current) {
+                clearTimeout(timeoutRef.current);
+            }
+        };
+    }, []);
 
     return (
         <View style={styles.container}>

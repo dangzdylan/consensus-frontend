@@ -5,17 +5,78 @@ import { Ionicons } from '@expo/vector-icons';
 import Button from '../components/Button';
 import Input from '../components/Input';
 import colors from '../constants/colors';
+import { authAPI } from '../services/api';
+import { useUser } from '../context/UserContext';
 
 export default function SignupScreen({ navigation }) {
-    const [name, setName] = useState('');
     const [username, setUsername] = useState('');
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
     const [agreed, setAgreed] = useState(false);
+    const [error, setError] = useState('');
+    const [loading, setLoading] = useState(false);
+    const { login } = useUser();
 
-    const handleSignup = () => {
-        // TODO: Implement signup logic
-        navigation.replace('Home');
+    const handleSignup = async () => {
+        // Clear previous errors
+        setError('');
+
+        // Validate input
+        if (!username || username.trim() === '') {
+            setError('Please enter a username');
+            return;
+        }
+
+        if (!agreed) {
+            setError('Please agree to the Terms of Service and Privacy Policy');
+            return;
+        }
+
+        setLoading(true);
+
+        try {
+            // Call backend API
+            const result = await authAPI.signup(username.trim());
+
+            if (result.error) {
+                // Handle error
+                setError(result.error);
+                setLoading(false);
+                return;
+            }
+
+            if (result.data) {
+                // Validate user data before saving
+                if (!result.data.user_id || !result.data.username) {
+                    console.error('Invalid user data from backend:', result.data);
+                    setError('Invalid response from server. Please try again.');
+                    setLoading(false);
+                    return;
+                }
+                
+                // Save user data and navigate
+                try {
+                    const loginResult = await login(result.data);
+                    if (loginResult.success) {
+                        if (navigation && navigation.replace) {
+                            navigation.replace('Home');
+                        } else {
+                            console.error('Navigation not available in SignupScreen');
+                        }
+                    } else {
+                        setError(loginResult.error || 'Failed to save user data. Please try again.');
+                    }
+                } catch (loginError) {
+                    console.error('Error saving user data:', loginError);
+                    setError('Failed to save user data. Please try again.');
+                }
+            } else {
+                setError('Signup failed. Please try again.');
+            }
+        } catch (error) {
+            console.error('Signup error:', error);
+            setError('An unexpected error occurred. Please try again.');
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
@@ -26,7 +87,14 @@ export default function SignupScreen({ navigation }) {
                 style={styles.keyboardView}
             >
                 <ScrollView contentContainerStyle={styles.scrollContent}>
-                    <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+                    <TouchableOpacity 
+                        onPress={() => {
+                            if (navigation && navigation.goBack) {
+                                navigation.goBack();
+                            }
+                        }} 
+                        style={styles.backButton}
+                    >
                         <Ionicons name="arrow-back" size={24} color={colors.white} />
                         <Text style={styles.backText}>back</Text>
                     </TouchableOpacity>
@@ -37,10 +105,17 @@ export default function SignupScreen({ navigation }) {
                     </View>
 
                     <View style={styles.form}>
-                        <Input placeholder="Enter your name" value={name} onChangeText={setName} />
-                        <Input placeholder="Enter username" value={username} onChangeText={setUsername} autoCapitalize="none" />
-                        <Input placeholder="Enter Email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
-                        <Input placeholder="Enter password" value={password} onChangeText={setPassword} secureTextEntry />
+                        <Text style={styles.label}>Username</Text>
+                        <Input 
+                            placeholder="Enter username" 
+                            value={username} 
+                            onChangeText={(text) => {
+                                setUsername(text);
+                                setError(''); // Clear error when user types
+                            }} 
+                            autoCapitalize="none"
+                            editable={!loading}
+                        />
 
                         <TouchableOpacity style={styles.checkboxContainer} onPress={() => setAgreed(!agreed)}>
                             <View style={[styles.checkbox, agreed && styles.checked]}>
@@ -51,25 +126,27 @@ export default function SignupScreen({ navigation }) {
                             </Text>
                         </TouchableOpacity>
 
-                        <Button title="Create Account" onPress={handleSignup} style={styles.signupButton} />
+                        {error ? (
+                            <Text style={styles.errorText}>{error}</Text>
+                        ) : null}
 
-                        <View style={styles.divider}>
-                            <View style={styles.line} />
-                            <Text style={styles.orText}>Or</Text>
-                            <View style={styles.line} />
-                        </View>
-
-                        <Button
-                            title="Sign up with Google"
-                            variant="secondary"
-                            onPress={() => { }}
-                            style={styles.googleButton}
-                            icon={<Ionicons name="logo-google" size={20} color={colors.white} style={{ marginRight: 8 }} />}
+                        <Button 
+                            title={loading ? "Creating Account..." : "Create Account"} 
+                            onPress={handleSignup} 
+                            style={styles.signupButton}
+                            loading={loading}
+                            disabled={loading || !username.trim() || !agreed}
                         />
 
                         <View style={styles.loginContainer}>
                             <Text style={styles.loginText}>Already have an account? </Text>
-                            <TouchableOpacity onPress={() => navigation.navigate('Login')}>
+                            <TouchableOpacity 
+                                onPress={() => {
+                                    if (navigation && navigation.navigate) {
+                                        navigation.navigate('Login');
+                                    }
+                                }}
+                            >
                                 <Text style={styles.loginLink}>Log In</Text>
                             </TouchableOpacity>
                         </View>
@@ -168,6 +245,20 @@ const styles = StyleSheet.create({
         backgroundColor: colors.darkGray,
         borderWidth: 0,
     },
+    googleButtonTouchable: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 16,
+        paddingHorizontal: 32,
+        borderRadius: 30,
+        marginVertical: 8,
+    },
+    googleButtonText: {
+        color: colors.white,
+        fontSize: 18,
+        fontWeight: 'bold',
+    },
     loginContainer: {
         flexDirection: 'row',
         justifyContent: 'center',
@@ -180,5 +271,18 @@ const styles = StyleSheet.create({
         color: colors.white,
         fontWeight: 'bold',
         textDecorationLine: 'underline',
+    },
+    errorText: {
+        color: colors.error,
+        fontSize: 14,
+        marginTop: -8,
+        marginBottom: 8,
+        textAlign: 'center',
+    },
+    label: {
+        color: colors.white,
+        fontWeight: '400',
+        marginBottom: 8,
+        fontSize: 16,
     },
 });

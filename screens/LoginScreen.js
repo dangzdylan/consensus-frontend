@@ -4,15 +4,75 @@ import { StatusBar } from 'expo-status-bar';
 import Button from '../components/Button';
 import Input from '../components/Input';
 import colors from '../constants/colors';
+import { authAPI } from '../services/api';
+import { useUser } from '../context/UserContext';
 
 export default function LoginScreen({ navigation }) {
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const { login } = useUser();
 
-  const handleLogin = () => {
-    // TODO: Implement actual login logic
-    navigation.replace('Home');
+  console.log('LoginScreen rendering, navigation:', navigation ? 'exists' : 'missing');
+
+  const handleLogin = async () => {
+    // Clear previous errors
+    setError('');
+    
+    // Validate input
+    if (!username || username.trim() === '') {
+      setError('Please enter a username');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      // Call backend API
+      const result = await authAPI.login(username.trim());
+
+      if (result.error) {
+        // Handle error
+        setError(result.error);
+        setLoading(false);
+        return;
+      }
+
+      if (result.data) {
+        // Validate user data before saving
+        if (!result.data.user_id || !result.data.username) {
+          console.error('Invalid user data from backend:', result.data);
+          setError('Invalid response from server. Please try again.');
+          setLoading(false);
+          return;
+        }
+        
+        // Save user data and navigate
+        try {
+          await login(result.data);
+          
+          if (navigation && navigation.replace) {
+            navigation.replace('Home');
+          } else {
+            console.error('Navigation not available in LoginScreen');
+          }
+        } catch (loginError) {
+          console.error('Error saving user data:', loginError);
+          setError('Failed to save user data. Please try again.');
+        }
+      } else {
+        setError('Login failed. Please try again.');
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      setError('An unexpected error occurred. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
+  console.log('LoginScreen about to render JSX');
+  
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="light" />
@@ -27,17 +87,30 @@ export default function LoginScreen({ navigation }) {
           </View>
 
           <View style={styles.form}>
-            <Text style={styles.label}>Username or Email</Text>
+            <Text style={styles.label}>Username</Text>
             <Input
-              placeholder=""
-              value={email}
-              onChangeText={setEmail}
+              placeholder="Enter your username"
+              value={username}
+              onChangeText={(text) => {
+                setUsername(text);
+                setError(''); // Clear error when user types
+              }}
               autoCapitalize="none"
-              keyboardType="email-address"
               style={styles.input}
+              editable={!loading}
             />
 
-            <Button title="Log in" onPress={handleLogin} style={styles.loginButton} />
+            {error ? (
+              <Text style={styles.errorText}>{error}</Text>
+            ) : null}
+
+            <Button 
+              title={loading ? "Logging in..." : "Log in"} 
+              onPress={handleLogin} 
+              style={styles.loginButton}
+              loading={loading}
+              disabled={loading || !username.trim()}
+            />
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -89,5 +162,12 @@ const styles = StyleSheet.create({
   },
   loginButton: {
     backgroundColor: colors.white,
+  },
+  errorText: {
+    color: colors.error,
+    fontSize: 14,
+    marginTop: -8,
+    marginBottom: 8,
+    textAlign: 'center',
   },
 });

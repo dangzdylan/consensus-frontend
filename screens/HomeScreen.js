@@ -18,7 +18,11 @@ export default function HomeScreen({ navigation }) {
                     {/* Create Consensus Card */}
                     <TouchableOpacity
                         style={styles.card}
-                        onPress={() => navigation.navigate('CreateLobby')}
+                        onPress={() => {
+                            if (navigation && navigation.navigate) {
+                                navigation.navigate('CreateLobby');
+                            }
+                        }}
                     >
                         <Text style={styles.cardTitle}>Create Consensus</Text>
                         <View style={styles.iconContainer}>
@@ -29,7 +33,11 @@ export default function HomeScreen({ navigation }) {
                     {/* Join Consensus Card */}
                     <TouchableOpacity
                         style={styles.card}
-                        onPress={() => navigation.navigate('JoinLobby')}
+                        onPress={() => {
+                            if (navigation && navigation.navigate) {
+                                navigation.navigate('JoinLobby');
+                            }
+                        }}
                     >
                         <Text style={styles.cardTitle}>Join Consensus</Text>
                         <View style={styles.iconContainer}>
@@ -45,7 +53,7 @@ export default function HomeScreen({ navigation }) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#FFCC99', // Light orange/peach background from Figma
+        backgroundColor: colors.primary, // Orange background from Figma
     },
     content: {
         flex: 1,

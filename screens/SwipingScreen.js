@@ -1,10 +1,12 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Animated, Dimensions } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Animated, Dimensions, Alert, ActivityIndicator } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import Card from '../components/Card';
 import colors from '../constants/colors';
 import { ACTIVITY_CATEGORIES, CATEGORY_ICONS, CATEGORY_COLORS } from '../constants/activityCategories';
+import { consensusAPI } from '../services/api';
+import { useUser } from '../context/UserContext';
 
 const { width } = Dimensions.get('window');
 
@@ -70,424 +72,377 @@ const isOpenDuringTimeframe = (activity, startHour, endHour, dayOfWeek) => {
     }
 };
 
-// Mock data generator - in real app, this would come from API based on category
-const generateOptionsForCategory = (category, count, startHour, endHour, dateString) => {
-    const dayOfWeek = getDayOfWeek(dateString);
-    
-    // All options with hours of operation
-    // hours format: { open: hour (0-23), close: hour (0-23), days: [0,1,2,3,4,5,6] }
-    // days: 0=Sunday, 1=Monday, ..., 6=Saturday
-    const allOptions = {
-        [ACTIVITY_CATEGORIES.FOOD]: [
-            { 
-                id: '1', 
-                name: 'Italian Restaurant', 
-                distance: '0.5', 
-                time: '12:00 PM', 
-                image: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1000',
-                hours: { open: 11, close: 22, days: [0,1,2,3,4,5,6] } // Open daily 11 AM - 10 PM
-            },
-            { 
-                id: '2', 
-                name: 'Sushi Bar', 
-                distance: '1.2', 
-                time: '1:00 PM', 
-                image: 'https://images.unsplash.com/photo-1579584425555-c3ce17fd4351?w=1000',
-                hours: { open: 12, close: 23, days: [1,2,3,4,5,6] } // Closed Mondays, 12 PM - 11 PM
-            },
-            { 
-                id: '3', 
-                name: 'Burger Joint', 
-                distance: '0.8', 
-                time: '2:00 PM', 
-                image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=1000',
-                hours: { open: 10, close: 22, days: [0,1,2,3,4,5,6] } // Open daily 10 AM - 10 PM
-            },
-        ],
-        [ACTIVITY_CATEGORIES.RECREATION]: [
-            { 
-                id: '4', 
-                name: 'Bowling Alley', 
-                distance: '2.1', 
-                time: '3:00 PM', 
-                image: 'https://images.unsplash.com/photo-1606107557195-0e29a4b5b4aa?w=1000',
-                hours: { open: 12, close: 23, days: [0,1,2,3,4,5,6] } // Open daily 12 PM - 11 PM
-            },
-            { 
-                id: '5', 
-                name: 'Arcade', 
-                distance: '1.5', 
-                time: '4:00 PM', 
-                image: 'https://images.unsplash.com/photo-1606144042614-b2417e99c4e3?w=1000',
-                hours: { open: 10, close: 22, days: [1,2,3,4,5,6] } // Closed Mondays, 10 AM - 10 PM
-            },
-            { 
-                id: '6', 
-                name: 'Escape Room', 
-                distance: '2.5', 
-                time: '5:00 PM', 
-                image: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=1000',
-                hours: { open: 14, close: 22, days: [0,1,2,3,4,5,6] } // Open daily 2 PM - 10 PM
-            },
-        ],
-        [ACTIVITY_CATEGORIES.NATURE]: [
-            { 
-                id: '7', 
-                name: 'Central Park', 
-                distance: '3.0', 
-                time: '6:00 PM', 
-                image: 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=1000',
-                hours: null // Always open
-            },
-            { 
-                id: '8', 
-                name: 'Beach Walk', 
-                distance: '4.2', 
-                time: '7:00 PM', 
-                image: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1000',
-                hours: null // Always open
-            },
-            { 
-                id: '9', 
-                name: 'Hiking Trail', 
-                distance: '5.1', 
-                time: '8:00 PM', 
-                image: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1000',
-                hours: { open: 6, close: 20, days: [0,1,2,3,4,5,6] } // Open 6 AM - 8 PM daily
-            },
-        ],
-        [ACTIVITY_CATEGORIES.ARTS]: [
-            { 
-                id: '10', 
-                name: 'Art Museum', 
-                distance: '1.8', 
-                time: '9:00 AM', 
-                image: 'https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=1000',
-                hours: { open: 10, close: 17, days: [1,2,3,4,5,6] } // Closed Mondays, 10 AM - 5 PM
-            },
-            { 
-                id: '11', 
-                name: 'Theater Show', 
-                distance: '2.3', 
-                time: '10:00 AM', 
-                image: 'https://images.unsplash.com/photo-1503095396549-807759245b35?w=1000',
-                hours: { open: 19, close: 22, days: [3,4,5,6,0] } // Shows Thu-Sun, 7 PM - 10 PM
-            },
-            { 
-                id: '12', 
-                name: 'Gallery', 
-                distance: '1.1', 
-                time: '11:00 AM', 
-                image: 'https://images.unsplash.com/photo-1541961017774-22349e4a1262?w=1000',
-                hours: { open: 11, close: 18, days: [1,2,3,4,5,6] } // Closed Mondays, 11 AM - 6 PM
-            },
-        ],
-        [ACTIVITY_CATEGORIES.SOCIAL]: [
-            { 
-                id: '13', 
-                name: 'Rooftop Bar', 
-                distance: '0.9', 
-                time: '8:00 PM', 
-                image: 'https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=1000',
-                hours: { open: 17, close: 2, days: [0,1,2,3,4,5,6] } // Open daily 5 PM - 2 AM (overnight)
-            },
-            { 
-                id: '14', 
-                name: 'Live Music Venue', 
-                distance: '1.7', 
-                time: '9:00 PM', 
-                image: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=1000',
-                hours: { open: 20, close: 2, days: [4,5,6,0] } // Thu-Sun, 8 PM - 2 AM
-            },
-            { 
-                id: '15', 
-                name: 'Comedy Club', 
-                distance: '2.0', 
-                time: '10:00 PM', 
-                image: 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=1000',
-                hours: { open: 19, close: 1, days: [3,4,5,6,0] } // Wed-Sun, 7 PM - 1 AM
-            },
-        ],
-    };
-
-    const categoryOptions = allOptions[category] || [];
-    
-    // Filter options based on date and timeframe
-    if (startHour !== undefined && endHour !== undefined && dateString) {
-        return categoryOptions.filter(option => 
-            isOpenDuringTimeframe(option, startHour, endHour, dayOfWeek)
-        );
-    }
-    
-    // If no filtering criteria, return all options
-    return categoryOptions;
-};
-
 export default function SwipingScreen({ route, navigation }) {
-    // Get lobby data from route params (set in CreateLobbyScreen or LobbyScreen)
-    const lobbyData = route?.params?.lobbyData || {
-        activityCounts: {
-            [ACTIVITY_CATEGORIES.FOOD]: 1,
-            [ACTIVITY_CATEGORIES.RECREATION]: 1,
-        }
-    };
+    const { userId } = useUser();
+    const lobby_id = route?.params?.lobby_id;
+    const lobbyData = route?.params?.lobbyData || {};
     const isOwner = route?.params?.isOwner || false;
 
-    // Build activity queue from lobby data with validation
-    const buildActivityQueue = () => {
-        const queue = [];
-        if (!lobbyData || !lobbyData.activityCounts) {
-            console.warn('Invalid lobby data, using defaults');
-            return [{
-                category: ACTIVITY_CATEGORIES.FOOD,
-                roundNumber: 1,
-                options: generateOptionsForCategory(ACTIVITY_CATEGORIES.FOOD, 1),
-            }];
-        }
-
-        Object.entries(lobbyData.activityCounts).forEach(([category, count]) => {
-            // Validate count is a number and positive
-            const validCount = Math.max(0, Math.min(10, parseInt(count, 10) || 0));
-            if (validCount <= 0) return;
-
-            for (let i = 0; i < validCount; i++) {
-                // Get filtered options based on date and timeframe
-                const options = generateOptionsForCategory(
-                    category, 
-                    validCount,
-                    lobbyData.startHour,
-                    lobbyData.endHour,
-                    lobbyData.date
-                );
-                
-                if (!options || options.length === 0) {
-                    console.warn(`No open options found for category: ${category} during selected timeframe (${lobbyData.date}, ${lobbyData.startHour}:00-${lobbyData.endHour}:00)`);
-                    // Skip this activity round if no options are available
-                    // In real app, you might want to notify the user or adjust the timeframe
-                    continue;
-                }
-                
-                // Ensure we have at least 2 options for voting (minimum for consensus)
-                if (options.length < 2) {
-                    console.warn(`Only ${options.length} option(s) available for ${category}. Consider expanding timeframe.`);
-                }
-                
-                queue.push({
-                    category,
-                    roundNumber: queue.length + 1,
-                    options,
-                    votes: {}, // Track votes: { optionId: [userId1, userId2, ...] }
-                });
-            }
-        });
-
-        if (queue.length === 0) {
-            console.error('No valid activities in queue');
-            // Try to get at least one option, even if filtered
-            const fallbackOptions = generateOptionsForCategory(
-                ACTIVITY_CATEGORIES.FOOD, 
-                1,
-                lobbyData?.startHour,
-                lobbyData?.endHour,
-                lobbyData?.date
-            );
-            
-            if (fallbackOptions.length > 0) {
-                return [{
-                    category: ACTIVITY_CATEGORIES.FOOD,
-                    roundNumber: 1,
-                    options: fallbackOptions,
-                }];
-            }
-            
-            // Last resort: return unfiltered options
-            return [{
-                category: ACTIVITY_CATEGORIES.FOOD,
-                roundNumber: 1,
-                options: generateOptionsForCategory(ACTIVITY_CATEGORIES.FOOD, 1),
-            }];
-        }
-
-        return queue;
-    };
-
-    // Use useMemo to rebuild queue when lobbyData changes
-    const activityQueue = useMemo(() => buildActivityQueue(), [
-        lobbyData?.activityCounts,
-        lobbyData?.startHour,
-        lobbyData?.endHour,
-        lobbyData?.date
-    ]);
-    
-    const [currentRoundIndex, setCurrentRoundIndex] = useState(0);
+    // State management
+    const [currentRoundNumber, setCurrentRoundNumber] = useState(1);
+    const [roundData, setRoundData] = useState(null); // Current round info
+    const [options, setOptions] = useState([]); // Options for current round
     const [currentOptionIndex, setCurrentOptionIndex] = useState(0);
     const [isTiebreaker, setIsTiebreaker] = useState(false);
     const [tiedOptions, setTiedOptions] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [voting, setVoting] = useState(false);
+    const [checkingConsensus, setCheckingConsensus] = useState(false);
+    const [totalRounds, setTotalRounds] = useState(0);
+    
     const fadeAnim = useRef(new Animated.Value(1)).current;
-    const retryCountRef = useRef(0); // Track retry attempts for no-vote scenario
+    const isMountedRef = useRef(true);
+    const statusCheckTimeoutRef = useRef(null);
+    const voteInProgressRef = useRef(false);
 
-    // Get current activity being voted on
-    const currentActivity = activityQueue && activityQueue.length > 0 
-        ? activityQueue[currentRoundIndex] 
-        : null;
-    const currentOptions = isTiebreaker ? tiedOptions : (currentActivity?.options || []);
+    // Fetch options for current round
+    const fetchRoundOptions = async (roundNumber) => {
+        if (!lobby_id || !isMountedRef.current) {
+            if (!lobby_id) {
+                Alert.alert('Error', 'Lobby ID missing');
+                if (navigation && navigation.goBack) {
+                    navigation.goBack();
+                }
+            }
+            return;
+        }
+
+        setLoading(true);
+        try {
+            const result = await consensusAPI.getRoundOptions(lobby_id, roundNumber);
+
+            if (!isMountedRef.current) return;
+
+            if (result.error) {
+                Alert.alert('Error', result.error);
+                setLoading(false);
+                return;
+            }
+
+            if (result.data) {
+                setRoundData(result.data.round);
+                const fetchedOptions = result.data.options || [];
+                
+                if (fetchedOptions.length === 0) {
+                    Alert.alert('Error', 'No options available for this round. Please try again.');
+                    setLoading(false);
+                    return;
+                }
+                
+                // Map backend options to frontend format
+                const mappedOptions = fetchedOptions.map(opt => ({
+                    id: opt.option_id || opt.id,
+                    name: opt.name,
+                    category: opt.category,
+                    distance: opt.distance?.toString() || '0',
+                    time: opt.time || '12:00 PM',
+                    image: opt.image_url || opt.image,
+                    hours: opt.hours,
+                    address: opt.address,
+                    location: opt.location,
+                }));
+
+                if (isMountedRef.current) {
+                    setOptions(mappedOptions);
+                    setCurrentOptionIndex(0);
+                    setIsTiebreaker(false);
+                    setTiedOptions([]);
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching round options:', error);
+            if (isMountedRef.current) {
+                Alert.alert('Error', 'Failed to load options. Please try again.');
+            }
+        } finally {
+            if (isMountedRef.current) {
+                setLoading(false);
+            }
+        }
+    };
+
+    // Get total number of rounds (from lobby data or estimate from activity counts)
+    useEffect(() => {
+        if (lobbyData?.activityCounts) {
+            const total = Object.values(lobbyData.activityCounts).reduce((sum, count) => sum + (count || 0), 0);
+            setTotalRounds(total);
+        }
+    }, [lobbyData]);
+
+    // Fetch options when round number changes
+    useEffect(() => {
+        if (lobby_id && currentRoundNumber) {
+            fetchRoundOptions(currentRoundNumber);
+        }
+    }, [lobby_id, currentRoundNumber]);
+
+    // Cleanup on unmount
+    useEffect(() => {
+        isMountedRef.current = true;
+        
+        return () => {
+            isMountedRef.current = false;
+            if (statusCheckTimeoutRef.current) {
+                clearTimeout(statusCheckTimeoutRef.current);
+            }
+        };
+    }, []);
+
+    // Get current option
+    const currentOptions = isTiebreaker ? tiedOptions : options;
     const currentOption = currentOptions && currentOptions.length > 0
         ? currentOptions[currentOptionIndex]
         : null;
 
-    // User votes tracking (in real app, this would sync with backend)
-    const [userVotes, setUserVotes] = useState(new Set());
-
-    // Reset state when activityQueue changes
-    useEffect(() => {
-        if (activityQueue && activityQueue.length > 0) {
-            setCurrentRoundIndex(0);
-            setCurrentOptionIndex(0);
-            setIsTiebreaker(false);
-            setTiedOptions([]);
-            setUserVotes(new Set());
-        }
-    }, [activityQueue]);
-
-    const handleSwipe = (direction) => {
-        // Safety check
-        if (!currentOption || !currentOptions || currentOptions.length === 0) {
-            console.error('Invalid state: no current option');
-            return;
+    // Submit vote to backend
+    const submitVote = async (optionId, vote) => {
+        if (!lobby_id || !userId || !optionId || !isMountedRef.current) {
+            console.error('Missing required data for vote');
+            return false;
         }
 
-        const vote = direction === 'right'; // true for yes, false for no
-        
-        // Record vote
-        if (vote) {
-            const newVotes = new Set(userVotes);
-            newVotes.add(currentOption.id);
-            setUserVotes(newVotes);
-        }
+        setVoting(true);
+        try {
+            const result = await consensusAPI.vote(lobby_id, {
+                user_id: userId,
+                option_id: optionId,
+                round_number: currentRoundNumber,
+                vote: vote,
+            });
 
-        Animated.timing(fadeAnim, {
-            toValue: 0,
-            duration: 200,
-            useNativeDriver: true,
-        }).start(() => {
-            if (currentOptionIndex < currentOptions.length - 1) {
-                // Move to next option
-                setCurrentOptionIndex(currentOptionIndex + 1);
-                fadeAnim.setValue(1);
-            } else {
-                // Finished voting on all options for this round
-                finishRound();
+            if (!isMountedRef.current) return false;
+
+            if (result.error) {
+                console.error('Vote error:', result.error);
+                return false;
             }
-        });
+
+            return true;
+        } catch (error) {
+            console.error('Error submitting vote:', error);
+            return false;
+        } finally {
+            if (isMountedRef.current) {
+                setVoting(false);
+            }
+        }
     };
 
-    const finishRound = () => {
-        // In real app, this would check with backend for all votes from all users
-        // For now, simulate checking results
-        const votedOptions = Array.from(userVotes);
-        
-        if (votedOptions.length === 0) {
-            // No options selected - allow retry but limit attempts
-            retryCountRef.current += 1;
-            
-            if (retryCountRef.current > 2) {
-                // After 2 retries, move to next round with no selection
-                alert('No options selected. Moving to next activity.');
-                retryCountRef.current = 0;
-                moveToNextActivity();
+    // Check round status for consensus
+    const checkRoundStatus = async () => {
+        if (!lobby_id || !isMountedRef.current) return;
+
+        setCheckingConsensus(true);
+        try {
+            const result = await consensusAPI.getRoundStatus(lobby_id, currentRoundNumber);
+
+            if (!isMountedRef.current) return; // Check before state updates
+
+            if (result.error) {
+                console.error('Error checking round status:', result.error);
+                setCheckingConsensus(false);
                 return;
             }
-            
-            alert('Please select at least one option to continue.');
-            setCurrentOptionIndex(0);
-            setUserVotes(new Set());
-            fadeAnim.setValue(1);
-            return;
-        }
 
-        // Filter to only valid options that exist in currentOptions
-        const validVotedOptions = votedOptions.filter(id => 
-            currentOptions.some(opt => opt.id === id)
-        );
+            if (result.data) {
+                const { consensus_reached, consensus_option_id, is_tie, tied_options, all_voted } = result.data;
 
-        if (validVotedOptions.length === 0) {
-            // Invalid votes, reset
-            setCurrentOptionIndex(0);
-            setUserVotes(new Set());
-            fadeAnim.setValue(1);
-            return;
-        }
-
-        // Check for ties (in real app, this would come from backend aggregating all user votes)
-        // For demo, if multiple options were voted, it's a tie
-        if (validVotedOptions.length > 1) {
-            // Tie detected - go to tiebreaker
-            const tiedOpts = currentOptions.filter(opt => validVotedOptions.includes(opt.id));
-            if (tiedOpts.length > 1) {
-                setIsTiebreaker(true);
-                setTiedOptions(tiedOpts);
-                setCurrentOptionIndex(0);
-                setUserVotes(new Set());
-                fadeAnim.setValue(1);
-            } else {
-                // Only one valid option, consensus reached
-                moveToNextActivity();
+                if (consensus_reached && consensus_option_id) {
+                    // Consensus reached - complete the round
+                    await completeRound(consensus_option_id);
+                } else if (is_tie && tied_options && tied_options.length > 0) {
+                    // Tie detected - set up tiebreaker
+                    const tiedOpts = options.filter(opt => tied_options.includes(opt.id));
+                    if (tiedOpts.length > 0 && isMountedRef.current) {
+                        setIsTiebreaker(true);
+                        setTiedOptions(tiedOpts);
+                        setCurrentOptionIndex(0);
+                        fadeAnim.setValue(1);
+                        setCheckingConsensus(false); // Exit checking state so user can vote
+                    } else {
+                        // Couldn't find tied options, retry status check
+                        if (statusCheckTimeoutRef.current) {
+                            clearTimeout(statusCheckTimeoutRef.current);
+                        }
+                        if (isMountedRef.current) {
+                            statusCheckTimeoutRef.current = setTimeout(() => {
+                                if (isMountedRef.current) {
+                                    checkRoundStatus();
+                                }
+                            }, 2000);
+                        }
+                    }
+                } else if (all_voted) {
+                    // All users voted but no consensus yet - wait a bit and check again
+                    if (statusCheckTimeoutRef.current) {
+                        clearTimeout(statusCheckTimeoutRef.current);
+                    }
+                    if (isMountedRef.current) {
+                        statusCheckTimeoutRef.current = setTimeout(() => {
+                            if (isMountedRef.current) {
+                                checkRoundStatus();
+                            }
+                        }, 2000);
+                    }
+                } else {
+                    // Not all users have voted yet - navigate to waiting screen
+                    if (isMountedRef.current) {
+                        navigateToWaiting();
+                    }
+                }
             }
-        } else {
-            // Consensus reached - move to next activity
-            moveToNextActivity();
+        } catch (error) {
+            console.error('Error checking round status:', error);
+        } finally {
+            if (isMountedRef.current) {
+                setCheckingConsensus(false);
+            }
         }
     };
 
-    const moveToNextActivity = () => {
-        // Reset retry counter for new activity
-        retryCountRef.current = 0;
+    // Complete round when consensus is reached
+    const completeRound = async (selectedOptionId) => {
+        if (!lobby_id || !userId || !isMountedRef.current) return;
+
+        try {
+            const result = await consensusAPI.completeRound(
+                lobby_id,
+                currentRoundNumber,
+                selectedOptionId,
+                userId
+            );
+
+            if (!isMountedRef.current) return;
+
+            if (result.error) {
+                Alert.alert('Error', result.error);
+                return;
+            }
+
+            if (result.data && isMountedRef.current) {
+                const { all_rounds_completed, next_round } = result.data;
+
+                if (all_rounds_completed) {
+                    // All rounds done - navigate to waiting screen (which will go to itinerary)
+                    navigateToWaiting();
+                } else if (next_round) {
+                    // Move to next round
+                    setCurrentRoundNumber(next_round);
+                    setIsTiebreaker(false);
+                    setTiedOptions([]);
+                }
+            }
+        } catch (error) {
+            console.error('Error completing round:', error);
+            if (isMountedRef.current) {
+                Alert.alert('Error', 'Failed to complete round. Please try again.');
+            }
+        }
+    };
+
+    // Navigate to waiting screen
+    const navigateToWaiting = () => {
+        if (navigation && navigation.replace && isMountedRef.current) {
+            navigation.replace('Waiting', {
+                lobby_id,
+                lobbyData,
+                isOwner,
+            });
+        }
+    };
+
+    // Handle swipe (vote)
+    const handleSwipe = async (direction) => {
+        if (!currentOption || voting || checkingConsensus || voteInProgressRef.current || !isMountedRef.current) return;
         
-        if (currentRoundIndex < activityQueue.length - 1) {
-            // Move to next activity
-            setCurrentRoundIndex(currentRoundIndex + 1);
-            setCurrentOptionIndex(0);
-            setIsTiebreaker(false);
-            setTiedOptions([]);
-            setUserVotes(new Set());
-            fadeAnim.setValue(1);
-        } else {
-            // All activities voted on - go to waiting screen
-            if (navigation && navigation.replace) {
-                navigation.replace('Waiting', { 
-                    allRoundsComplete: true,
-                    lobbyData,
-                    isOwner
-                });
+        // Set flag immediately to prevent duplicate calls
+        voteInProgressRef.current = true;
+        setVoting(true);
+
+        const vote = direction === 'right'; // true for yes, false for no
+        const optionId = currentOption.id; // Capture before async
+
+        try {
+            // Submit vote to backend
+            const success = await submitVote(optionId, vote);
+
+            if (!isMountedRef.current) {
+                voteInProgressRef.current = false;
+                return;
+            }
+
+            if (!success) {
+                setVoting(false);
+                voteInProgressRef.current = false;
+                Alert.alert('Error', 'Failed to submit vote. Please try again.');
+                return;
+            }
+
+            // Animate card out
+            Animated.timing(fadeAnim, {
+                toValue: 0,
+                duration: 200,
+                useNativeDriver: true,
+            }).start(() => {
+                if (!isMountedRef.current) {
+                    voteInProgressRef.current = false;
+                    return;
+                }
+                
+                if (currentOptionIndex < currentOptions.length - 1) {
+                    // Move to next option
+                    setCurrentOptionIndex(currentOptionIndex + 1);
+                    fadeAnim.setValue(1);
+                    setVoting(false);
+                    voteInProgressRef.current = false;
+                } else {
+                    // Finished voting on all options - check for consensus
+                    setVoting(false);
+                    voteInProgressRef.current = false;
+                    checkRoundStatus();
+                }
+            });
+        } catch (error) {
+            console.error('Swipe error:', error);
+            if (isMountedRef.current) {
+                setVoting(false);
+                voteInProgressRef.current = false;
+                Alert.alert('Error', 'An unexpected error occurred.');
             }
         }
     };
 
+    // Get progress text
     const getProgressText = () => {
-        if (!currentActivity) return 'Loading...';
+        if (!roundData) return 'Loading...';
         if (isTiebreaker) {
-            return `Tiebreaker - ${currentActivity.category}`;
+            return `Tiebreaker - ${roundData.category}`;
         }
-        const queueLength = activityQueue.length || 1; // Prevent division by zero
-        return `Activity ${Math.min(currentRoundIndex + 1, queueLength)}/${queueLength}: ${currentActivity.category}`;
+        return `Round ${currentRoundNumber}${totalRounds > 0 ? `/${totalRounds}` : ''}: ${roundData.category}`;
     };
 
-    // Check if any rounds have no open options
-    const roundsWithNoOptions = activityQueue.filter(round => 
-        !round.options || round.options.length === 0
-    );
-    
-    if (roundsWithNoOptions.length > 0) {
+    // Loading state
+    if (loading && options.length === 0) {
+        return (
+            <SafeAreaView style={styles.container}>
+                <StatusBar style="light" />
+                <View style={styles.centerContent}>
+                    <ActivityIndicator size="large" color={colors.white} />
+                    <Text style={styles.noMoreText}>Loading options...</Text>
+                </View>
+            </SafeAreaView>
+        );
+    }
+
+    // Error state - no options
+    if (!loading && options.length === 0) {
         return (
             <SafeAreaView style={styles.container}>
                 <StatusBar style="light" />
                 <View style={styles.centerContent}>
                     <Ionicons name="alert-circle-outline" size={64} color={colors.white} />
                     <Text style={styles.noMoreText}>
-                        No options available for some activities during the selected timeframe.
-                    </Text>
-                    <Text style={styles.noMoreSubtext}>
-                        Please adjust your date or time in the lobby settings.
+                        No options available for this round.
                     </Text>
                     <TouchableOpacity
                         style={styles.backButton}
@@ -504,29 +459,20 @@ export default function SwipingScreen({ route, navigation }) {
         );
     }
 
-    // Safety checks
-    if (!activityQueue || activityQueue.length === 0) {
+    // Checking consensus state
+    if (checkingConsensus) {
         return (
             <SafeAreaView style={styles.container}>
                 <StatusBar style="light" />
                 <View style={styles.centerContent}>
-                    <Text style={styles.noMoreText}>No activities found. Returning to lobby...</Text>
+                    <ActivityIndicator size="large" color={colors.white} />
+                    <Text style={styles.noMoreText}>Checking consensus...</Text>
                 </View>
             </SafeAreaView>
         );
     }
 
-    if (!currentActivity || !currentOptions || currentOptions.length === 0) {
-        return (
-            <SafeAreaView style={styles.container}>
-                <StatusBar style="light" />
-                <View style={styles.centerContent}>
-                    <Text style={styles.noMoreText}>Loading next activity...</Text>
-                </View>
-            </SafeAreaView>
-        );
-    }
-
+    // Safety check
     if (!currentOption) {
         return (
             <SafeAreaView style={styles.container}>
@@ -549,7 +495,7 @@ export default function SwipingScreen({ route, navigation }) {
                         style={[
                             styles.progressFill, 
                             { 
-                                width: `${Math.min(100, Math.max(0, ((currentRoundIndex + 1) / Math.max(1, activityQueue.length)) * 100))}%` 
+                                width: `${Math.min(100, Math.max(0, totalRounds > 0 ? ((currentRoundNumber / totalRounds) * 100) : 0))}%` 
                             }
                         ]} 
                     />
@@ -557,22 +503,33 @@ export default function SwipingScreen({ route, navigation }) {
             </View>
 
             <View style={styles.cardContainer}>
-                <Animated.View style={{ opacity: fadeAnim, transform: [{ scale: fadeAnim }] }}>
+                    <Animated.View style={{ opacity: fadeAnim, transform: [{ scale: fadeAnim }] }}>
                     <Card item={currentOption} />
-                </Animated.View>
+                    </Animated.View>
                 <Text style={styles.optionCounter}>
                     {currentOptionIndex + 1} / {currentOptions.length}
                 </Text>
             </View>
 
             <View style={styles.buttonsContainer}>
-                <TouchableOpacity style={styles.circleButton} onPress={() => handleSwipe('left')}>
+                <TouchableOpacity 
+                    style={[styles.circleButton, (voting || checkingConsensus) && styles.circleButtonDisabled]} 
+                    onPress={() => handleSwipe('left')}
+                    disabled={voting || checkingConsensus}
+                >
                     <Ionicons name="close" size={40} color={colors.error} />
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.circleButton} onPress={() => handleSwipe('right')}>
+                <TouchableOpacity 
+                    style={[styles.circleButton, (voting || checkingConsensus) && styles.circleButtonDisabled]} 
+                    onPress={() => handleSwipe('right')}
+                    disabled={voting || checkingConsensus}
+                >
                     <Ionicons name="checkmark" size={40} color={colors.success} />
                 </TouchableOpacity>
             </View>
+            {voting && (
+                <Text style={styles.votingText}>Submitting vote...</Text>
+            )}
         </SafeAreaView>
     );
 }
@@ -678,5 +635,14 @@ const styles = StyleSheet.create({
         color: colors.primary,
         fontSize: 16,
         fontWeight: 'bold',
+    },
+    circleButtonDisabled: {
+        opacity: 0.5,
+    },
+    votingText: {
+        color: colors.white,
+        fontSize: 14,
+        textAlign: 'center',
+        marginTop: 8,
     },
 });

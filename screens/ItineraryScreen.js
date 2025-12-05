@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import Button from '../components/Button';
 import colors from '../constants/colors';
 import { ACTIVITY_CATEGORIES, CATEGORY_ICONS, CATEGORY_COLORS } from '../constants/activityCategories';
+import { resultAPI } from '../services/api';
 
 // Helper function to parse date and get day of week (0 = Sunday, 6 = Saturday)
 const getDayOfWeek = (dateString) => {
@@ -62,40 +63,63 @@ const isOpenDuringTimeframe = (activity, startHour, endHour, dayOfWeek) => {
 };
 
 export default function ItineraryScreen({ route, navigation }) {
-    const { lobbyData, selectedActivities, isOwner } = route?.params || {};
+    const { lobby_id, lobbyData, isOwner } = route?.params || {};
     
-    // Mock selected activities with hours data - in real app, this comes from voting results
-    // Activities should include hours data from the API/voting results
-    const [activities, setActivities] = useState(selectedActivities || [
-        { 
-            id: '1', 
-            name: 'Italian Restaurant', 
-            category: ACTIVITY_CATEGORIES.FOOD, 
-            time: '12:00 PM', 
-            duration: 1,
-            hours: { open: 11, close: 22, days: [0,1,2,3,4,5,6] }
-        },
-        { 
-            id: '2', 
-            name: 'Bowling Alley', 
-            category: ACTIVITY_CATEGORIES.RECREATION, 
-            time: '1:00 PM', 
-            duration: 1,
-            hours: { open: 12, close: 23, days: [0,1,2,3,4,5,6] }
-        },
-        { 
-            id: '3', 
-            name: 'Central Park', 
-            category: ACTIVITY_CATEGORIES.NATURE, 
-            time: '2:00 PM', 
-            duration: 1,
-            hours: null // Always open
-        },
-    ]);
+    const [activities, setActivities] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
 
     const startHour = lobbyData?.startHour || 12;
     const endHour = lobbyData?.endHour || 18;
     const date = lobbyData?.date || 'Today';
+
+    // Fetch itinerary from backend
+    useEffect(() => {
+        const fetchItinerary = async () => {
+            if (!lobby_id) {
+                setError('Lobby ID missing');
+                setLoading(false);
+                return;
+            }
+
+            try {
+                const result = await resultAPI.getItinerary(lobby_id);
+
+                if (result.error) {
+                    setError(result.error);
+                    setLoading(false);
+                    return;
+                }
+
+                if (result.data && result.data.activities) {
+                    // Map backend activities to frontend format
+                    const mappedActivities = result.data.activities.map((activity, index) => ({
+                        id: activity.id || activity.option_id,
+                        name: activity.name,
+                        category: activity.category,
+                        time: activity.time || '12:00 PM',
+                        duration: activity.duration || 1,
+                        hours: activity.hours,
+                        location: activity.location,
+                        address: activity.address,
+                        image: activity.image || activity.image_url,
+                        round_number: activity.round_number,
+                    }));
+
+                    setActivities(mappedActivities);
+                } else {
+                    setError('No activities found in itinerary');
+                }
+            } catch (error) {
+                console.error('Error fetching itinerary:', error);
+                setError('Failed to load itinerary. Please try again.');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchItinerary();
+    }, [lobby_id]);
 
     // Calculate times for activities (1 hour each by default)
     const calculateTimes = (activities) => {
@@ -120,7 +144,14 @@ export default function ItineraryScreen({ route, navigation }) {
         });
     };
 
-    const [scheduledActivities, setScheduledActivities] = useState(calculateTimes(activities));
+    const [scheduledActivities, setScheduledActivities] = useState([]);
+
+    // Recalculate times when activities change
+    useEffect(() => {
+        if (activities.length > 0) {
+            setScheduledActivities(calculateTimes(activities));
+        }
+    }, [activities, startHour, endHour]);
 
     const moveActivity = (fromIndex, toIndex) => {
         if (!isOwner) return; // Only owner can reorder
@@ -233,6 +264,34 @@ export default function ItineraryScreen({ route, navigation }) {
         }
     };
 
+    if (loading) {
+        return (
+            <SafeAreaView style={styles.container}>
+                <StatusBar style="light" />
+                <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="large" color={colors.white} />
+                    <Text style={styles.loadingText}>Loading itinerary...</Text>
+                </View>
+            </SafeAreaView>
+        );
+    }
+
+    if (error) {
+        return (
+            <SafeAreaView style={styles.container}>
+                <StatusBar style="light" />
+                <View style={styles.errorContainer}>
+                    <Text style={styles.errorText}>{error}</Text>
+                    <Button
+                        title="Go Back"
+                        onPress={() => navigation?.goBack()}
+                        style={styles.backButton}
+                    />
+                </View>
+            </SafeAreaView>
+        );
+    }
+
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar style="light" />
@@ -325,6 +384,31 @@ export default function ItineraryScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    loadingText: {
+        color: colors.white,
+        marginTop: 16,
+        fontSize: 16,
+    },
+    errorContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 24,
+    },
+    errorText: {
+        color: colors.error,
+        fontSize: 16,
+        textAlign: 'center',
+        marginBottom: 24,
+    },
+    backButton: {
+        backgroundColor: colors.white,
+    },
     container: {
         flex: 1,
         backgroundColor: colors.background,

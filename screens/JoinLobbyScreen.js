@@ -1,15 +1,28 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Alert } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import Button from '../components/Button';
 import CodeInput from '../components/CodeInput';
 import colors from '../constants/colors';
+import { lobbyAPI } from '../services/api';
+import { useUser } from '../context/UserContext';
 
 export default function JoinLobbyScreen({ navigation }) {
+    const { userId } = useUser();
     const [code, setCode] = useState('');
     const [error, setError] = useState('');
+    const [loading, setLoading] = useState(false);
 
     const handleJoin = async () => {
+        // Check if user is logged in
+        if (!userId) {
+            Alert.alert('Error', 'Please log in to join a lobby');
+            if (navigation && navigation.navigate) {
+                navigation.navigate('Login');
+            }
+            return;
+        }
+
         // Validate code format (4-6 alphanumeric characters)
         if (!code || code.length < 4) {
             setError('Please enter a valid lobby code');
@@ -23,37 +36,54 @@ export default function JoinLobbyScreen({ navigation }) {
             return;
         }
 
-        try {
-            // TODO: Validate code with backend
-            // In real app: 
-            // const response = await joinLobby(code.toUpperCase());
-            // if (response.error) {
-            //     setError(response.error);
-            //     return;
-            // }
-            // if (response.lobbyFull) {
-            //     setError('Lobby is full. Maximum 25 members allowed.');
-            //     return;
-            // }
-            // if (response.lobbyNotFound) {
-            //     setError('Lobby not found. Please check the code.');
-            //     return;
-            // }
+        setLoading(true);
+        setError('');
 
-            // Simulate validation - in real app, check backend response
-            setError('');
-            if (navigation && navigation.navigate) {
-                navigation.navigate('Lobby', { 
-                    lobbyCode: code.toUpperCase(),
-                    isOwner: false 
-                });
+        try {
+            // Call backend API
+            const result = await lobbyAPI.join(code.toUpperCase(), userId);
+
+            if (result.error) {
+                setError(result.error);
+                setLoading(false);
+                return;
+            }
+
+            if (result.data) {
+                // Create lobby data object for navigation
+                const lobbyData = {
+                    lobby_id: result.data.lobby_id,
+                    code: result.data.code,
+                    radius: result.data.radius,
+                    date: result.data.date,
+                    startHour: result.data.start_hour,
+                    endHour: result.data.end_hour,
+                    activityCounts: result.data.activity_counts,
+                    location: result.data.location,
+                    maxMembers: result.data.max_members,
+                    status: result.data.status,
+                };
+
+                // Navigate to Lobby screen with lobby data
+                if (navigation && navigation.navigate) {
+                    navigation.navigate('Lobby', { 
+                        lobbyData,
+                        lobbyCode: result.data.code,
+                        isOwner: false,
+                        lobby_id: result.data.lobby_id
+                    });
+                } else {
+                    console.error('Navigation not available');
+                    setError('Navigation error. Please try again.');
+                }
             } else {
-                console.error('Navigation not available');
-                setError('Navigation error. Please try again.');
+                setError('Failed to join lobby. Please try again.');
             }
         } catch (error) {
-            setError('Failed to join lobby. Please try again.');
             console.error('Join lobby error:', error);
+            setError('An unexpected error occurred. Please try again.');
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -78,10 +108,11 @@ export default function JoinLobbyScreen({ navigation }) {
                 ) : null}
 
                 <Button
-                    title="Join"
+                    title={loading ? "Joining..." : "Join"}
                     onPress={handleJoin}
                     style={styles.joinButton}
-                    disabled={!code || code.length < 4}
+                    disabled={!code || code.length < 4 || loading}
+                    loading={loading}
                 />
             </View>
         </SafeAreaView>

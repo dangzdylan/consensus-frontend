@@ -1,13 +1,20 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, Modal, TextInput } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, Modal, TextInput, Alert } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
+import * as Location from 'expo-location';
 import Button from '../components/Button';
 import colors from '../constants/colors';
 import { ACTIVITY_CATEGORIES, CATEGORY_ICONS, CATEGORY_COLORS } from '../constants/activityCategories';
 import Slider from '@react-native-community/slider';
+import { lobbyAPI } from '../services/api';
+import { useUser } from '../context/UserContext';
 
 export default function CreateLobbyScreen({ navigation }) {
+    const { userId } = useUser();
+    const [loading, setLoading] = useState(false);
+    const [selectedLocation, setSelectedLocation] = useState(null);
+    const [locationLoading, setLocationLoading] = useState(false);
     const [radius, setRadius] = useState(2.5);
     const [selectedDate, setSelectedDate] = useState(null);
     const [showDatePicker, setShowDatePicker] = useState(false);
@@ -79,63 +86,165 @@ export default function CreateLobbyScreen({ navigation }) {
         });
     };
 
-    const handleContinue = () => {
+    const handleContinue = async () => {
+        // Check if user is logged in
+        if (!userId) {
+            Alert.alert('Error', 'Please log in to create a lobby');
+            if (navigation && navigation.navigate) {
+                navigation.navigate('Login');
+            }
+            return;
+        }
+
         // Validate date
         if (!selectedDate) {
-            alert('Please select a date');
+            Alert.alert('Error', 'Please select a date');
             return;
         }
         if (!validateDate(selectedDate)) {
-            alert('Please select a valid future date');
+            Alert.alert('Error', 'Please select a valid future date');
             setSelectedDate(null);
             return;
         }
 
         // Validate activities
         if (totalActivities === 0) {
-            alert('Please select at least one activity');
+            Alert.alert('Error', 'Please select at least one activity');
             return;
         }
         if (totalActivities > MAX_ACTIVITIES) {
-            alert(`Maximum ${MAX_ACTIVITIES} activities allowed`);
+            Alert.alert('Error', `Maximum ${MAX_ACTIVITIES} activities allowed`);
             return;
         }
 
         // Validate timeframe
         if (startHour >= endHour) {
-            alert('End time must be after start time');
+            Alert.alert('Error', 'End time must be after start time');
             return;
         }
         if (totalHours < totalActivities) {
-            alert(`You need at least ${totalActivities} hours for ${totalActivities} activities`);
+            Alert.alert('Error', `You need at least ${totalActivities} hours for ${totalActivities} activities`);
             return;
         }
         if (totalHours > 12) {
-            alert('Maximum 12 hours allowed for a hangout');
+            Alert.alert('Error', 'Maximum 12 hours allowed for a hangout');
             return;
         }
 
         // Validate radius
         if (radius < 0.5 || radius > 10) {
-            alert('Radius must be between 0.5 and 10 miles');
+            Alert.alert('Error', 'Radius must be between 0.5 and 10 miles');
             return;
         }
 
-        const lobbyData = {
-            radius: Math.round(radius * 10) / 10, // Round to 1 decimal
-            date: selectedDate,
-            startHour: Math.floor(startHour),
-            endHour: Math.floor(endHour),
-            activityCounts: { ...activityCounts }, // Create copy
-            location: 'Current Location', // TODO: Get actual location
-            maxMembers: MAX_MEMBERS,
-        };
+        setLoading(true);
+        setLocationLoading(true);
 
-        // Pass lobby data to next screen
-        if (navigation && navigation.navigate) {
-            navigation.navigate('Lobby', { lobbyData, isOwner: true });
-        } else {
-            console.error('Navigation not available');
+        try {
+            // Request location permissions
+            let { status } = await Location.requestForegroundPermissionsAsync();
+            if (status !== 'granted') {
+                Alert.alert(
+                    'Location Permission Required',
+                    'Please enable location permissions to create a lobby.',
+                    [{ text: 'OK' }]
+                );
+                setLoading(false);
+                setLocationLoading(false);
+                return;
+            }
+
+            // Get current location
+            let locationResult = await Location.getCurrentPositionAsync({
+                accuracy: Location.Accuracy.Balanced,
+            });
+            
+            const location = {
+                latitude: locationResult.coords.latitude,
+                longitude: locationResult.coords.longitude
+            };
+
+            // Validate location
+            if (!location || typeof location.latitude !== 'number' || typeof location.longitude !== 'number') {
+                Alert.alert('Error', 'Invalid location. Please enable location services.');
+                setLoading(false);
+                setLocationLoading(false);
+                return;
+            }
+
+            // Validate coordinates are within valid range
+            if (location.latitude < -90 || location.latitude > 90 || 
+                location.longitude < -180 || location.longitude > 180) {
+                Alert.alert('Error', 'Invalid location coordinates.');
+                setLoading(false);
+                setLocationLoading(false);
+                return;
+            }
+
+            setSelectedLocation(location);
+            setLocationLoading(false);
+
+            // Prepare activity_counts for backend (use exact category names)
+            const activity_counts = {
+                [ACTIVITY_CATEGORIES.FOOD]: activityCounts[ACTIVITY_CATEGORIES.FOOD],
+                [ACTIVITY_CATEGORIES.RECREATION]: activityCounts[ACTIVITY_CATEGORIES.RECREATION],
+                [ACTIVITY_CATEGORIES.NATURE]: activityCounts[ACTIVITY_CATEGORIES.NATURE],
+                [ACTIVITY_CATEGORIES.ARTS]: activityCounts[ACTIVITY_CATEGORIES.ARTS],
+                [ACTIVITY_CATEGORIES.SOCIAL]: activityCounts[ACTIVITY_CATEGORIES.SOCIAL],
+            };
+
+            // Call backend API
+            const result = await lobbyAPI.create({
+                host_id: userId,
+                location: location,
+                radius: Math.round(radius * 10) / 10,
+                date: selectedDate, // Already in MM/DD/YYYY format
+                start_hour: Math.floor(startHour),
+                end_hour: Math.floor(endHour),
+                activity_counts: activity_counts,
+                max_members: MAX_MEMBERS,
+            });
+
+            if (result.error) {
+                Alert.alert('Error', result.error);
+                setLoading(false);
+                return;
+            }
+
+            if (result.data) {
+                // Create lobby data object for navigation
+                const lobbyData = {
+                    lobby_id: result.data.lobby_id,
+                    code: result.data.code,
+                    radius: result.data.radius,
+                    date: result.data.date,
+                    startHour: result.data.start_hour,
+                    endHour: result.data.end_hour,
+                    activityCounts: result.data.activity_counts,
+                    location: result.data.location,
+                    maxMembers: result.data.max_members,
+                    status: result.data.status,
+                };
+
+                // Navigate to Lobby screen with lobby data
+                if (navigation && navigation.navigate) {
+                    navigation.navigate('Lobby', { 
+                        lobbyData, 
+                        isOwner: true,
+                        lobby_id: result.data.lobby_id 
+                    });
+                } else {
+                    console.error('Navigation not available');
+                }
+            } else {
+                Alert.alert('Error', 'Failed to create lobby. Please try again.');
+            }
+        } catch (error) {
+            console.error('Create lobby error:', error);
+            Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+            setLocationLoading(false);
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -267,10 +376,11 @@ export default function CreateLobbyScreen({ navigation }) {
                 ))}
 
                 <Button
-                    title="Create Lobby"
+                    title={loading ? "Creating..." : "Create Lobby"}
                     onPress={handleContinue}
                     style={styles.continueButton}
-                    disabled={!selectedDate || totalActivities === 0 || totalHours < totalActivities}
+                    disabled={!selectedDate || totalActivities === 0 || totalHours < totalActivities || loading}
+                    loading={loading}
                 />
             </ScrollView>
 
