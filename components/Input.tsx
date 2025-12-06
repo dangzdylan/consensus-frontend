@@ -36,6 +36,6 @@ const styles = StyleSheet.create({
     input: {
         padding: 16,
         fontSize: 16,
-        color: colors.white, // Default to white, but overridable
+        color: colors.black, // Default to black for better visibility
     },
 });

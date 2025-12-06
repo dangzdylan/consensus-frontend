@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, SafeAreaView, ActivityIndicator, ScrollView, Alert } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
+import Header from '../components/Header';
 import colors from '../constants/colors';
 import { consensusAPI } from '../services/api';
 
@@ -117,6 +118,7 @@ export default function WaitingScreen({ route, navigation }) {
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar style="light" />
+            <Header />
             <View style={styles.content}>
                 <View style={styles.iconContainer}>
                     <Ionicons name="hourglass-outline" size={80} color={colors.white} />

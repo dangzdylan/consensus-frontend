@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import MapView, { Circle, Marker } from 'react-native-maps';
 import Button from '../components/Button';
+import Header from '../components/Header';
 import colors from '../constants/colors';
 import { ACTIVITY_CATEGORIES, CATEGORY_ICONS, CATEGORY_COLORS } from '../constants/activityCategories';
 import Slider from '@react-native-community/slider';
@@ -430,6 +431,7 @@ export default function CreateLobbyScreen({ navigation }) {
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar style="light" />
+            <Header />
             {currentStep === 1 ? (
                 <ScrollView 
                     style={styles.scrollView} 

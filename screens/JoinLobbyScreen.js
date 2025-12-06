@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Alert } from 'r
 import { StatusBar } from 'expo-status-bar';
 import Button from '../components/Button';
 import CodeInput from '../components/CodeInput';
+import Header from '../components/Header';
 import colors from '../constants/colors';
 import { lobbyAPI } from '../services/api';
 import { useUser } from '../context/UserContext';
@@ -90,6 +91,7 @@ export default function JoinLobbyScreen({ navigation }) {
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar style="light" />
+            <Header />
             <View style={styles.content}>
                 <View style={styles.header}>
                     <Text style={styles.title}>Join a</Text>

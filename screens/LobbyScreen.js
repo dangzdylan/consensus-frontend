@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Ale
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import Button from '../components/Button';
+import Header from '../components/Header';
 import colors from '../constants/colors';
 import { ACTIVITY_CATEGORIES } from '../constants/activityCategories';
 import { lobbyAPI, consensusAPI } from '../services/api';
@@ -198,6 +199,7 @@ export default function LobbyScreen({ route, navigation }) {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="light" />
+      <Header />
       <View style={styles.content}>
         <View style={styles.header}>
           <Text style={styles.title}>Lobby</Text>

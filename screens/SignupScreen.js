@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import Button from '../components/Button';
 import Input from '../components/Input';
+import Header from '../components/Header';
 import colors from '../constants/colors';
 import { authAPI } from '../services/api';
 import { useUser } from '../context/UserContext';
@@ -96,6 +97,7 @@ export default function SignupScreen({ navigation }) {
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar style="light" />
+            <Header />
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={styles.keyboardView}

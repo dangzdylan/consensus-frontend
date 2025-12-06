@@ -1,10 +1,13 @@
-import { Platform } from 'react-native';
 
 // Base URL for API
 // Use local IP for device testing, localhost for simulator
 // Replace with your machine's IP address if running on physical device
-// const BASE_URL = 'http://127.0.0.1:5001';
-const BASE_URL = 'http://192.168.0.143:5001';
+const BASE_URL = 'http://127.0.0.1:5001';
+
+// IMPORTANT: This frontend should work with free APIs only
+// Backend should use free image sources (Unsplash, placeholder.com, etc.)
+// No paid API keys (Google Places, Yelp, etc.) should be required
+//
 
 /**
  * Generic API request handler

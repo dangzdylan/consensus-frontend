@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, SafeAreaView, T
 import { StatusBar } from 'expo-status-bar';
 import Button from '../components/Button';
 import Input from '../components/Input';
+import Header from '../components/Header';
 import colors from '../constants/colors';
 import { authAPI } from '../services/api';
 import { useUser } from '../context/UserContext';
@@ -89,12 +90,13 @@ export default function LoginScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="light" />
+      <Header />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
       >
         <View style={styles.content}>
-          <View style={styles.header}>
+          <View style={styles.titleContainer}>
             <Text style={styles.title}>Ready for a</Text>
             <Text style={styles.titleBold}>Consensus?</Text>
           </View>
@@ -110,6 +112,7 @@ export default function LoginScreen({ navigation }) {
               }}
               autoCapitalize="none"
               style={styles.input}
+              inputStyle={styles.inputText}
               editable={!loading}
             />
 
@@ -157,7 +160,7 @@ const styles = StyleSheet.create({
     padding: 24,
     justifyContent: 'center',
   },
-  header: {
+  titleContainer: {
     alignItems: 'center',
     marginBottom: 48,
   },
@@ -185,6 +188,9 @@ const styles = StyleSheet.create({
     borderRadius: 30,
     borderWidth: 0,
     marginBottom: 24,
+  },
+  inputText: {
+    color: colors.black,
   },
   loginButton: {
     backgroundColor: colors.white,

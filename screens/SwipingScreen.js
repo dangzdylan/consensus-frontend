@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Animated, Dimen
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import Card from '../components/Card';
+import Header from '../components/Header';
 import colors from '../constants/colors';
 import { ACTIVITY_CATEGORIES, CATEGORY_ICONS, CATEGORY_COLORS } from '../constants/activityCategories';
 import { consensusAPI } from '../services/api';
@@ -143,19 +144,85 @@ export default function SwipingScreen({ route, navigation }) {
                 }
                 
                 // Map backend options to frontend format
-                const mappedOptions = fetchedOptions.map(opt => ({
-                    id: opt.option_id || opt.id,
-                    name: opt.name,
-                    category: opt.category,
-                    distance: opt.distance?.toString() || '0',
-                    time: opt.time || '12:00 PM',
-                    image: opt.image_url || opt.image,
-                    hours: opt.hours,
-                    address: opt.address,
-                    location: opt.location,
-                }));
+                // Backend now provides hardcoded Unsplash image URLs in image_url field
+                // Option model returns both 'image' and 'image_url' fields (both set to same value)
+                const mappedOptions = fetchedOptions.map(opt => {
+                    // Backend Option model provides: image_url, name, address, location, distance, category
+                    // Validate we have real location data
+                    const hasRealName = opt.name || opt.title;
+                    const hasRealLocation = (opt.location && opt.location.latitude && opt.location.longitude) || 
+                                          (opt.lat && opt.lng) || 
+                                          (opt.latitude && opt.longitude);
+                    const hasRealAddress = opt.address || opt.formatted_address || opt.location_address;
+                    // Backend provides image_url with hardcoded Unsplash URLs
+                    const hasRealImage = opt.image_url || opt.image;
+                    
+                    if (!hasRealName) {
+                        console.warn(`[SwipingScreen] Option missing name:`, opt);
+                    }
+                    if (!hasRealLocation) {
+                        console.warn(`[SwipingScreen] Option missing location coordinates:`, opt);
+                    }
+                    if (!hasRealAddress) {
+                        console.warn(`[SwipingScreen] Option missing address:`, opt);
+                    }
+                    if (!hasRealImage) {
+                        console.warn(`[SwipingScreen] Option missing image URL:`, opt);
+                    }
+
+                    // Backend Option.to_dict() returns both 'image' and 'image_url' (both same value)
+                    // Prefer image_url as it's the primary field in backend
+                    const imageUrl = opt.image_url || opt.image;
+                    
+                    const mapped = {
+                        id: opt.option_id || opt.id,
+                        name: opt.name || opt.title || opt.place_name || 'Unknown Activity',
+                        category: opt.category || opt.type || 'Uncategorized',
+                        distance: opt.distance ? opt.distance.toString() : (opt.distance_miles ? opt.distance_miles.toString() : (opt.distance_km ? (opt.distance_km * 0.621371).toFixed(1) : '0')),
+                        time: opt.time || '12:00 PM',
+                        // Backend provides hardcoded Unsplash URLs in image_url field
+                        image: imageUrl,
+                        hours: opt.hours || opt.opening_hours || opt.business_hours,
+                        address: opt.address || opt.formatted_address || opt.location_address || opt.vicinity,
+                        // Backend provides location as {latitude, longitude} object
+                        location: opt.location || (opt.lat && opt.lng ? { latitude: opt.lat, longitude: opt.lng } : (opt.latitude && opt.longitude ? { latitude: opt.latitude, longitude: opt.longitude } : null)),
+                        // Additional fields for validation
+                        place_id: opt.place_id || opt.google_place_id,
+                        rating: opt.rating,
+                        price_level: opt.price_level,
+                    };
+                    
+                    console.log(`[SwipingScreen] Mapped option:`, {
+                        name: mapped.name,
+                        address: mapped.address,
+                        image: mapped.image ? `${mapped.image.substring(0, 80)}...` : 'none',
+                        imageType: typeof mapped.image,
+                        location: mapped.location,
+                        hasRealData: hasRealName && hasRealLocation && hasRealAddress && hasRealImage
+                    });
+                    
+                    return mapped;
+                });
 
                 console.log(`[SwipingScreen] Mapped ${mappedOptions.length} options successfully`);
+                if (fetchedOptions.length > 0) {
+                    console.log(`[SwipingScreen] Sample raw option from backend:`, {
+                        option_id: fetchedOptions[0]?.option_id,
+                        name: fetchedOptions[0]?.name,
+                        category: fetchedOptions[0]?.category,
+                        image_url: fetchedOptions[0]?.image_url ? `${fetchedOptions[0].image_url.substring(0, 80)}...` : 'none',
+                        image: fetchedOptions[0]?.image ? `${fetchedOptions[0].image.substring(0, 80)}...` : 'none',
+                        address: fetchedOptions[0]?.address,
+                        location: fetchedOptions[0]?.location,
+                        distance: fetchedOptions[0]?.distance,
+                    });
+                }
+                
+                // Validate that we have real location data
+                const optionsWithRealData = mappedOptions.filter(opt => opt.name && opt.name !== 'Unknown Activity' && opt.address);
+                if (optionsWithRealData.length < mappedOptions.length) {
+                    console.warn(`[SwipingScreen] Warning: ${mappedOptions.length - optionsWithRealData.length} options missing real location data`);
+                }
 
                 if (isMountedRef.current) {
                     setOptions(mappedOptions);
@@ -524,6 +591,7 @@ export default function SwipingScreen({ route, navigation }) {
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar style="light" />
+            <Header />
             <View style={styles.header}>
                 <Text style={styles.headerTitle}>Consensus</Text>
                 <Text style={styles.progressText}>{getProgressText()}</Text>

@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
-import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
+import { StatusBar } from 'expo-status-bar';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Button from '../components/Button';
+import Header from '../components/Header';
+import { CATEGORY_COLORS, CATEGORY_ICONS } from '../constants/activityCategories';
 import colors from '../constants/colors';
-import { ACTIVITY_CATEGORIES, CATEGORY_ICONS, CATEGORY_COLORS } from '../constants/activityCategories';
 import { resultAPI } from '../services/api';
 
 // Helper function to parse date and get day of week (0 = Sunday, 6 = Saturday)
@@ -93,19 +94,34 @@ export default function ItineraryScreen({ route, navigation }) {
 
                 if (result.data && result.data.activities) {
                     // Map backend activities to frontend format
-                    const mappedActivities = result.data.activities.map((activity, index) => ({
-                        id: activity.id || activity.option_id,
-                        name: activity.name,
-                        category: activity.category,
-                        time: activity.time || '12:00 PM',
-                        duration: activity.duration || 1,
-                        hours: activity.hours,
-                        location: activity.location,
-                        address: activity.address,
-                        image: activity.image || activity.image_url,
-                        round_number: activity.round_number,
-                    }));
+                    // Backend result route returns both 'image' and 'image_url' fields (both same value)
+                    const mappedActivities = result.data.activities.map((activity, index) => {
+                        // Backend provides image_url with hardcoded Unsplash URLs
+                        const imageUrl = activity.image_url || activity.image;
+                        
+                        const mapped = {
+                            id: activity.id || activity.option_id,
+                            name: activity.name || activity.title || activity.place_name || 'Unknown Activity',
+                            category: activity.category || activity.type || 'Uncategorized',
+                            time: activity.time || '12:00 PM',
+                            duration: activity.duration || 1,
+                            hours: activity.hours || activity.opening_hours || activity.business_hours,
+                            location: activity.location || (activity.lat && activity.lng ? { latitude: activity.lat, longitude: activity.lng } : (activity.latitude && activity.longitude ? { latitude: activity.latitude, longitude: activity.longitude } : null)),
+                            address: activity.address || activity.formatted_address || activity.location_address || activity.vicinity,
+                            // Backend provides hardcoded Unsplash URLs in image_url field
+                            image: imageUrl,
+                            round_number: activity.round_number,
+                        };
+                        console.log(`[ItineraryScreen] Mapped activity:`, {
+                            name: mapped.name,
+                            address: mapped.address,
+                            image: mapped.image ? `${mapped.image.substring(0, 80)}...` : 'none',
+                            imageType: typeof mapped.image
+                        });
+                        return mapped;
+                    });
 
+                    console.log(`[ItineraryScreen] Mapped ${mappedActivities.length} activities from backend`);
                     setActivities(mappedActivities);
                 } else {
                     setError('No activities found in itinerary');
@@ -268,6 +284,7 @@ export default function ItineraryScreen({ route, navigation }) {
         return (
             <SafeAreaView style={styles.container}>
                 <StatusBar style="light" />
+                <Header />
                 <View style={styles.loadingContainer}>
                     <ActivityIndicator size="large" color={colors.white} />
                     <Text style={styles.loadingText}>Loading itinerary...</Text>
@@ -280,6 +297,7 @@ export default function ItineraryScreen({ route, navigation }) {
         return (
             <SafeAreaView style={styles.container}>
                 <StatusBar style="light" />
+                <Header />
                 <View style={styles.errorContainer}>
                     <Text style={styles.errorText}>{error}</Text>
                     <Button
@@ -295,6 +313,7 @@ export default function ItineraryScreen({ route, navigation }) {
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar style="light" />
+            <Header />
             <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
                 <View style={styles.header}>
                     <Text style={styles.title}>Your Itinerary</Text>
@@ -548,4 +567,3 @@ const styles = StyleSheet.create({
         textAlign: 'center',
     },
 });
-

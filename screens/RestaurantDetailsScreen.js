@@ -26,10 +26,11 @@ export default function RestaurantDetailsScreen({ route, navigation }) {
             <StatusBar style="light" />
             {/* Map Background Placeholder */}
             <View style={styles.mapPlaceholder}>
-                <Image
-                    source={{ uri: 'https://maps.googleapis.com/maps/api/staticmap?center=Berkeley,CA&zoom=14&size=600x300&key=YOUR_API_KEY' }}
-                    style={styles.mapImage}
-                />
+                {/* Map placeholder - using free map service or hardcoded image */}
+                <View style={styles.mapPlaceholderContent}>
+                    <Ionicons name="map-outline" size={64} color={colors.gray} />
+                    <Text style={styles.mapPlaceholderText}>Map View</Text>
+                </View>
                 {/* Back Button Overlay */}
                 <SafeAreaView style={styles.headerOverlay}>
                     <TouchableOpacity onPress={() => navigation.goBack()} style={styles.closeButton}>
@@ -107,11 +108,17 @@ const styles = StyleSheet.create({
     mapPlaceholder: {
         height: '40%',
         backgroundColor: '#ddd',
+        justifyContent: 'center',
+        alignItems: 'center',
     },
-    mapImage: {
-        width: '100%',
-        height: '100%',
-        opacity: 0.6,
+    mapPlaceholderContent: {
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    mapPlaceholderText: {
+        marginTop: 8,
+        fontSize: 16,
+        color: '#666',
     },
     headerOverlay: {
         position: 'absolute',

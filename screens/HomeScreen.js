@@ -2,14 +2,16 @@ import React from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
+import Header from '../components/Header';
 import colors from '../constants/colors';
 
 export default function HomeScreen({ navigation }) {
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar style="light" />
+            <Header />
             <View style={styles.content}>
-                <View style={styles.header}>
+                <View style={styles.titleContainer}>
                     <Text style={styles.title}>Find a Perfect</Text>
                     <Text style={styles.title}>Plan</Text>
                 </View>
@@ -60,7 +62,7 @@ const styles = StyleSheet.create({
         padding: 24,
         justifyContent: 'center',
     },
-    header: {
+    titleContainer: {
         marginBottom: 48,
         alignItems: 'center',
     },
