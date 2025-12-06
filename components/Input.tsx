@@ -1,12 +1,18 @@
 import React from 'react';
-import { TextInput, StyleSheet, View } from 'react-native';
+import { TextInput, StyleSheet, View, TextInputProps, StyleProp, ViewStyle, TextStyle } from 'react-native';
 import colors from '../constants/colors';
 
-export default function Input({ placeholder, value, onChangeText, secureTextEntry, style, ...props }) {
+interface InputProps extends TextInputProps {
+    secureTextEntry?: boolean;
+    style?: StyleProp<ViewStyle>;
+    inputStyle?: StyleProp<TextStyle>;
+}
+
+export default function Input({ placeholder, value, onChangeText, secureTextEntry, style, inputStyle, ...props }: InputProps) {
     return (
         <View style={[styles.container, style]}>
             <TextInput
-                style={styles.input}
+                style={[styles.input, inputStyle]}
                 placeholder={placeholder}
                 placeholderTextColor={colors.gray}
                 value={value}
@@ -30,6 +36,6 @@ const styles = StyleSheet.create({
     input: {
         padding: 16,
         fontSize: 16,
-        color: colors.white,
+        color: colors.white, // Default to white, but overridable
     },
 });

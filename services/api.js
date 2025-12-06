@@ -1,172 +1,91 @@
-/**
- * API Service
- * Handles all HTTP requests to the backend
- */
+import { Platform } from 'react-native';
 
-// Backend base URL - change this if your backend is on a different host/port
-// For physical device testing, use your computer's IP address instead of localhost
-const BASE_URL = (typeof __DEV__ !== 'undefined' && __DEV__)
-    ? 'http://127.0.0.1:5001'  // Local development
-    : 'http://127.0.0.1:5001'; // Production (update with actual backend URL)
+// Base URL for API
+// Use local IP for device testing, localhost for simulator
+// Replace with your machine's IP address if running on physical device
+// const BASE_URL = 'http://127.0.0.1:5001';
+const BASE_URL = 'http://192.168.0.143:5001';
 
 /**
- * Make an API request
- * @param {string} endpoint - API endpoint (e.g., '/api/auth/login')
- * @param {object} options - Fetch options (method, body, headers, etc.)
- * @returns {Promise<{data: any, error: string|null, status: number}>}
+ * Generic API request handler
+ * @param {string} endpoint
+ * @param {object} options
+ * @returns {Promise<{data: any, error: string|null}>}
  */
-async function apiRequest(endpoint, options = {}) {
-    const url = `${BASE_URL}${endpoint}`;
-    const defaultHeaders = {
-        'Content-Type': 'application/json',
-    };
-
-    const config = {
-        ...options,
-        headers: {
-            ...defaultHeaders,
-            ...options.headers,
-        },
-    };
-
+const apiRequest = async (endpoint, options = {}) => {
     try {
+        const url = `${BASE_URL}${endpoint}`;
         console.log(`[API] ${options.method || 'GET'} ${url}`);
         
-        const response = await fetch(url, config);
-        
-        // Check if response has content
-        const contentType = response.headers.get('content-type');
-        const hasJsonContent = contentType && contentType.includes('application/json');
-        
-        // Get response text first to handle empty responses
-        const responseText = await response.text();
-        
-        let json = {};
-        if (responseText && responseText.trim() !== '') {
-            try {
-                json = JSON.parse(responseText);
-            } catch (parseError) {
-                console.error(`[API] JSON parse error for ${url}:`, parseError);
-                console.error(`[API] Response text:`, responseText);
-                
-                if (!response.ok) {
-                    return {
-                        data: null,
-                        error: `Invalid response from server: ${response.status} ${response.statusText}`,
-                        status: response.status,
-                    };
-                }
-                
-                // If successful but not JSON, return the text as data
-                return {
-                    data: responseText,
-                    message: null,
-                    error: null,
-                    status: response.status,
-                };
-            }
+        const response = await fetch(url, {
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers,
+            },
+            ...options,
+        });
+
+        // Parse response
+        let data;
+        const contentType = response.headers.get("content-type");
+        if (contentType && contentType.indexOf("application/json") !== -1) {
+            data = await response.json();
+        } else {
+            data = await response.text();
         }
-        
+
         if (!response.ok) {
             // Handle error response
-            // Backend returns: {"error": "message"} for errors
-            let errorMessage = json.error || json.message;
+            const errorMessage = (typeof data === 'object' && data.error) 
+                ? data.error 
+                : (typeof data === 'string' ? data : `Request failed with status ${response.status}`);
             
-            // If json is an array (unexpected format), try to extract error from first element
-            if (Array.isArray(json) && json.length > 0) {
-                const firstItem = json[0];
-                if (firstItem && typeof firstItem === 'object' && firstItem.error) {
-                    errorMessage = firstItem.error;
-                } else {
-                    errorMessage = JSON.stringify(json);
-                }
-            }
-            
-            // Fallback to status text if no error message found
-            if (!errorMessage) {
-                errorMessage = `HTTP ${response.status}: ${response.statusText}`;
-            }
-            
-            console.error(`[API Error] ${url}:`, errorMessage);
-            return {
-                data: null,
-                error: errorMessage,
-                status: response.status,
-            };
+            console.error(`[API Error] ${url}: ${errorMessage}`);
+            return { data: null, error: errorMessage };
         }
 
-        // Handle success response
-        console.log(`[API Success] ${url}:`, json);
-        return {
-            data: json.data || json,
-            message: json.message,
-            error: null,
-            status: response.status,
-        };
+        console.log(`[API Success] ${url}: ${JSON.stringify(data).substring(0, 100)}...`);
+        // Backend returns format: { data: ..., message: ... } or just data
+        return { data: data.data || data, error: null };
     } catch (error) {
-        // Handle network errors
-        console.error(`[API Network Error] ${url}:`, error.message);
-        return {
-            data: null,
-            error: error.message || 'Network error. Please check your connection.',
-            status: 0,
-        };
+        console.error(`[API Network Error] ${error.message}`);
+        return { data: null, error: error.message || 'Network request failed' };
     }
-}
+};
 
-/**
- * Authentication API methods
- */
+// API Services
+
 export const authAPI = {
     /**
-     * Login with username
+     * Sign up a new user
      * @param {string} username
-     * @returns {Promise<{data: user object, error: string|null}>}
+     * @returns {Promise<{data: UserData, error: string|null}>}
      */
-    login: async (username) => {
-        if (!username || username.trim() === '') {
-            return {
-                data: null,
-                error: 'Username is required',
-                status: 400,
-            };
-        }
-
-        return apiRequest('/api/auth/login', {
+    signup: async (username) => {
+        return apiRequest('/api/auth/signup', {
             method: 'POST',
-            body: JSON.stringify({ username: username.trim() }),
+            body: JSON.stringify({ username }),
         });
     },
 
     /**
-     * Signup with username
+     * Login user
      * @param {string} username
-     * @returns {Promise<{data: user object, error: string|null}>}
+     * @returns {Promise<{data: UserData, error: string|null}>}
      */
-    signup: async (username) => {
-        if (!username || username.trim() === '') {
-            return {
-                data: null,
-                error: 'Username is required',
-                status: 400,
-            };
-        }
-
-        return apiRequest('/api/auth/signup', {
+    login: async (username) => {
+        return apiRequest('/api/auth/login', {
             method: 'POST',
-            body: JSON.stringify({ username: username.trim() }),
+            body: JSON.stringify({ username }),
         });
     },
 };
 
-/**
- * Lobby API methods
- */
 export const lobbyAPI = {
     /**
      * Create a new lobby
-     * @param {object} lobbyData - { host_id, location, radius, date, start_hour, end_hour, activity_counts, max_members }
-     * @returns {Promise<{data: lobby object, error: string|null}>}
+     * @param {object} lobbyData
+     * @returns {Promise<{data: LobbyData, error: string|null}>}
      */
     create: async (lobbyData) => {
         return apiRequest('/api/lobbies', {
@@ -176,31 +95,22 @@ export const lobbyAPI = {
     },
 
     /**
-     * Join a lobby by code
-     * @param {string} code - Lobby join code
-     * @param {string} user_id - User ID
-     * @returns {Promise<{data: lobby object, error: string|null}>}
+     * Join an existing lobby
+     * @param {string} code
+     * @param {string} user_id
+     * @returns {Promise<{data: LobbyData, error: string|null}>}
      */
     join: async (code, user_id) => {
         return apiRequest('/api/lobbies/join', {
             method: 'POST',
-            body: JSON.stringify({ code: code.toUpperCase(), user_id }),
+            body: JSON.stringify({ code, user_id }),
         });
     },
 
     /**
-     * Get lobby details by ID
+     * Get lobby status/details
      * @param {string} lobby_id
-     * @returns {Promise<{data: lobby object, error: string|null}>}
-     */
-    get: async (lobby_id) => {
-        return apiRequest(`/api/lobbies/${lobby_id}`);
-    },
-
-    /**
-     * Get lobby status with members
-     * @param {string} lobby_id
-     * @returns {Promise<{data: status object, error: string|null}>}
+     * @returns {Promise<{data: LobbyData, error: string|null}>}
      */
     getStatus: async (lobby_id) => {
         return apiRequest(`/api/lobbies/${lobby_id}/status`);
@@ -219,17 +129,25 @@ export const lobbyAPI = {
             body: JSON.stringify({ ready }),
         });
     },
+
+    /**
+     * Leave current lobby
+     * @param {string} user_id
+     * @returns {Promise<{data: any, error: string|null}>}
+     */
+    leave: async (user_id) => {
+        return apiRequest(`/api/lobbies/member/${user_id}/leave`, {
+            method: 'POST',
+        });
+    },
 };
 
-/**
- * Consensus/Voting API methods
- */
 export const consensusAPI = {
     /**
-     * Start the voting game (host only)
+     * Start the game (host only)
      * @param {string} lobby_id
      * @param {string} user_id
-     * @returns {Promise<{data: status object, error: string|null}>}
+     * @returns {Promise<{data: any, error: string|null}>}
      */
     start: async (lobby_id, user_id) => {
         return apiRequest(`/api/consensus/lobby/${lobby_id}/start`, {
@@ -242,42 +160,45 @@ export const consensusAPI = {
      * Get options for a round
      * @param {string} lobby_id
      * @param {number} round_number
-     * @returns {Promise<{data: {round, options, count}, error: string|null}>}
+     * @returns {Promise<{data: Option[], error: string|null}>}
      */
     getRoundOptions: async (lobby_id, round_number) => {
         return apiRequest(`/api/consensus/lobby/${lobby_id}/round/${round_number}/options`);
     },
 
     /**
-     * Submit a vote
+     * Submit vote for an option
      * @param {string} lobby_id
-     * @param {object} voteData - { user_id, option_id, round_number, vote }
-     * @returns {Promise<{data: vote object, error: string|null}>}
+     * @param {string} user_id
+     * @param {string} option_id
+     * @param {number} round_number
+     * @param {string} vote 'like', 'dislike', 'superlike'
+     * @returns {Promise<{data: any, error: string|null}>}
      */
-    vote: async (lobby_id, voteData) => {
+    vote: async (lobby_id, user_id, option_id, round_number, vote) => {
         return apiRequest(`/api/consensus/lobby/${lobby_id}/vote`, {
             method: 'POST',
-            body: JSON.stringify(voteData),
+            body: JSON.stringify({ user_id, option_id, round_number, vote }),
         });
     },
 
     /**
-     * Get round status and consensus info
+     * Get status of current round
      * @param {string} lobby_id
      * @param {number} round_number
-     * @returns {Promise<{data: status object, error: string|null}>}
+     * @returns {Promise<{data: any, error: string|null}>}
      */
     getRoundStatus: async (lobby_id, round_number) => {
         return apiRequest(`/api/consensus/lobby/${lobby_id}/round/${round_number}/status`);
     },
 
     /**
-     * Complete a round (mark consensus reached)
+     * Complete round (mark consensus reached)
      * @param {string} lobby_id
      * @param {number} round_number
      * @param {string} selected_option_id
      * @param {string} user_id
-     * @returns {Promise<{data: completion object, error: string|null}>}
+     * @returns {Promise<{data: any, error: string|null}>}
      */
     completeRound: async (lobby_id, round_number, selected_option_id, user_id) => {
         return apiRequest(`/api/consensus/lobby/${lobby_id}/round/${round_number}/complete`, {
@@ -285,36 +206,24 @@ export const consensusAPI = {
             body: JSON.stringify({ selected_option_id, user_id }),
         });
     },
-
+    
     /**
-     * Get waiting status (who's finished voting)
+     * Get waiting status (who finished voting)
      * @param {string} lobby_id
-     * @returns {Promise<{data: waiting status object, error: string|null}>}
+     * @returns {Promise<{data: any, error: string|null}>}
      */
     getWaitingStatus: async (lobby_id) => {
         return apiRequest(`/api/consensus/lobby/${lobby_id}/waiting`);
-    },
+    }
 };
 
-/**
- * Result API methods
- */
 export const resultAPI = {
     /**
-     * Get final itinerary with selected activities
+     * Get final itinerary
      * @param {string} lobby_id
-     * @returns {Promise<{data: itinerary object, error: string|null}>}
+     * @returns {Promise<{data: any, error: string|null}>}
      */
     getItinerary: async (lobby_id) => {
         return apiRequest(`/api/results/lobby/${lobby_id}/itinerary`);
-    },
+    }
 };
-
-export default {
-    auth: authAPI,
-    lobby: lobbyAPI,
-    consensus: consensusAPI,
-    result: resultAPI,
-    BASE_URL,
-};
-

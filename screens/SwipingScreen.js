@@ -206,11 +206,29 @@ export default function SwipingScreen({ route, navigation }) {
         };
     }, []);
 
-    // Get current option
+// Get current option
     const currentOptions = isTiebreaker ? tiedOptions : options;
     const currentOption = currentOptions && currentOptions.length > 0
         ? currentOptions[currentOptionIndex]
         : null;
+
+    // Reset state when options change (new round)
+    useEffect(() => {
+        console.log("[SwipingScreen] currentOptions changed:", currentOptions?.length);
+        if (currentOptions && currentOptions.length > 0) {
+            console.log("[SwipingScreen] Resetting card state for new round");
+            setCurrentOptionIndex(0);
+            
+            // Force reset animation with a small delay to ensure render availability
+            setTimeout(() => {
+                console.log("[SwipingScreen] Forcing fadeAnim to 1");
+                fadeAnim.setValue(1); 
+            }, 50);
+
+
+        }
+    }, [currentOptions]);
+
 
     // Submit vote to backend
     const submitVote = async (optionId, vote) => {
@@ -221,12 +239,13 @@ export default function SwipingScreen({ route, navigation }) {
 
         setVoting(true);
         try {
-            const result = await consensusAPI.vote(lobby_id, {
-                user_id: userId,
-                option_id: optionId,
-                round_number: currentRoundNumber,
-                vote: vote,
-            });
+            const result = await consensusAPI.vote(
+                lobby_id, 
+                userId, 
+                optionId, 
+                currentRoundNumber, 
+                vote
+            );
 
             if (!isMountedRef.current) return false;
 
@@ -263,11 +282,11 @@ export default function SwipingScreen({ route, navigation }) {
             }
 
             if (result.data) {
-                const { consensus_reached, consensus_option_id, is_tie, tied_options, all_voted } = result.data;
+                const { consensus_reached, winning_option_id, is_tie, tied_options, all_voted } = result.data;
 
-                if (consensus_reached && consensus_option_id) {
+                if (consensus_reached && winning_option_id) {
                     // Consensus reached - complete the round
-                    await completeRound(consensus_option_id);
+                    await completeRound(winning_option_id);
                 } else if (is_tie && tied_options && tied_options.length > 0) {
                     // Tie detected - set up tiebreaker
                     const tiedOpts = options.filter(opt => tied_options.includes(opt.id));
@@ -377,7 +396,7 @@ export default function SwipingScreen({ route, navigation }) {
         voteInProgressRef.current = true;
         setVoting(true);
 
-        const vote = direction === 'right'; // true for yes, false for no
+        const vote = direction === 'right' ? 'like' : 'dislike';
         const optionId = currentOption.id; // Capture before async
 
         try {

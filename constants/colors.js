@@ -5,6 +5,8 @@ export default {
     black: '#000000',
     gray: '#E5E5E5',
     darkGray: '#333333',
+    lightGray: '#F5F5F5',
+    primaryLight: '#FF8A65',
     success: '#4CD964', // Green check
     error: '#FF3B30', // Red X
     text: '#333333',
